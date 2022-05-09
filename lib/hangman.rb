@@ -136,7 +136,6 @@ class Game
   end
 
   def display_correct_guessed_letters
-    p @correct_guessed_letters
     output = ''
     @answer.chars.each do |char|
       output += @correct_guessed_letters.member?(char) ? char : '_'
