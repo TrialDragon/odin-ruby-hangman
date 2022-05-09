@@ -46,6 +46,9 @@ class Game
   CONFIG = YAML.load(File.open('config.yaml'))
   DICTIONARY = File.new CONFIG['dictionary']
 
+  attr_accessor :game_over
+  alias game_over? game_over
+
   def initialize
     default_init unless load_data
     game
@@ -55,7 +58,8 @@ class Game
     @answer = generate_answer
     @incorrect_guesses = 0
     @guessed_letters = Set[]
-    @game_done = false
+    @correct_guessed_letters = Set[]
+    @game_over = false
   end
 
   def generate_answer
@@ -69,14 +73,15 @@ class Game
     return unless data_exists?
 
     should_load_data = Input.boolean message: 'Load data'
-    unserialize(File.open("#{CONFIG['savesDirectory']}/save")) if should_load_data
+    unserialize(File.open("#{CONFIG['saveDirectory']}/save")) if should_load_data
     should_load_data
   end
 
   def save_data
-    should_save_data = Input.boolean message: 'Save data'
+    return unless Input.boolean message: 'Save data'
+
     File.open("#{CONFIG['saveDirectory']}/save", 'w') do |save_file|
-      save_file.write serialize if should_save_data
+      save_file.write serialize
     end
   end
 
@@ -85,12 +90,7 @@ class Game
   end
 
   def guess
-    is_letter = Input.boolean(message: 'Do you wish to guess a [letter] or [word]?', truthy: 'letter', falsey: 'word')
-    is_letter ? guess_letter : guess_word
-    puts "You have #{@incorrect_guesses} incorrect guesses"
-    # TODO: separate winning and losing from gameover
-    @game_done |= @incorrect_guesses >= 8
-    puts 'Congratz, you won!' if @game_done
+    Input.boolean(message: 'What type of guess', truthy: 'letter', falsey: 'word') ? guess_letter : guess_word
   end
 
   def guess_letter
@@ -98,40 +98,65 @@ class Game
     until valid
       letter = Input.character alphabet: true
       valid = !@guessed_letters.member?(letter)
-      puts 'Letter already guessed' unless valid
+      puts 'Already guessed that letter' unless valid
     end
-    correct = @answer.match?(/[#{letter.downcase}]/)
-    @guessed_letters.add letter if correct
-    @incorrect_guesses += 1 unless correct
-    puts correct ? 'You got it!' : 'Incorrect guess'
-    @game_done = @guessed_letters == Set[@answer.chars]
+    @guessed_letters.add letter
+    @correct_guessed_letters.add letter if @answer.match? letter
+    win if @correct_guessed_letters == Set[@answer.chars]
+    wrong_guess unless @answer.match? letter
   end
 
   def guess_word
-    word = Input.input message: 'Word Input'
-    @game_done = @answer.casecmp word
-    @incorrect_guesses += 1 unless @game_done
-    @guessed_letters.add @answer.chars if @game_done
-    puts 'Incorrect guess' unless @game_done
+    word = Input.input(message: 'Word Input')
+    matches = word.casecmp? @answer
+    wrong_guess unless matches
+    win if matches
   end
 
-  def display_guessed_letters
+  def wrong_guess
+    @incorrect_guesses += 1
+    puts 'Wrong guess'
+    puts "Incorrect guesses:#{@incorrect_guesses}"
+    lose if @incorrect_guesses >= 8
+  end
+
+  def win
+    puts 'You won!'
+    finish_game
+  end
+
+  def lose
+    puts 'You lost!'
+    finish_game
+  end
+
+  def finish_game
+    @game_over = true
+    @correct_guessed_letters = Set.new @answer.chars
+  end
+
+  def display_correct_guessed_letters
+    p @correct_guessed_letters
+    output = ''
     @answer.chars.each do |char|
-      print @guessed_letters.member?(char) ? char : '_'
-      print ' '
+      output += @correct_guessed_letters.member?(char) ? char : '_'
+      output += ' '
     end
-    puts
+    puts output.chomp
   end
 
   def play_again
-    game if Input.boolean message: 'Do you want to play again'
+    return unless Input.boolean message: 'Play again'
+
+    @game_over = false
+    game
   end
 
   def game
-    until @game_done
+    until game_over?
       save_data
       guess
-      display_guessed_letters
+      display_correct_guessed_letters
     end
     play_again
   end
