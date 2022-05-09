@@ -1,0 +1,6 @@
+---
+saveDirectory: saves
+dictionary: word-list.txt
+word:
+  minLength: 5
+  maxLength: 12
